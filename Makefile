@@ -3,27 +3,20 @@ OS=
 ARCH=
 PROFIX=
 NAME=filegogo
-BINDIR=bin
 VERSION=$(shell git describe --tags || git rev-parse --short HEAD || echo "unknown version")
+COMMIT=$(shell git rev-parse HEAD || echo "unknown commit")
 BUILD_TIME=$(shell date +%FT%T%z)
-LD_FLAGS='-X "filegogo/version.Version=$(VERSION)" -X "filegogo/version.BuildTime=$(BUILD_TIME)"'
+LD_FLAGS='\
+				 -X "filegogo/version.Version=$(VERSION)" \
+				 -X "filegogo/version.Commit=$(COMMIT)" \
+				 -X "filegogo/version.Date=$(BUILD_TIME)" \
+'
+
 GOBUILD=CGO_ENABLED=0 \
-				go build -trimpath -ldflags $(LD_FLAGS)
-
-PLATFORM_LIST = \
-								darwin-amd64 \
-								linux-386 \
-								linux-amd64 \
-								linux-armv7 \
-								linux-armv8 \
-								freebsd-amd64
-
-WINDOWS_ARCH_LIST = \
-										windows-386 \
-										windows-amd64
+				go build -tags release -trimpath -ldflags $(LD_FLAGS)
 
 .PHONY: default
-default: data build
+default: webapp build
 
 .PHONY: build
 build:
@@ -37,45 +30,14 @@ install:
 
 .PHONY: webapp
 webapp:
-	pushd webapp && npm run build && popd
+	npm run build
 
-.PHONY: data
-data: webapp
-	cp -r webapp/build/ server/build
-
-darwin-amd64: data
-	GOARCH=amd64 GOOS=darwin $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-linux-386: data
-	GOARCH=386 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-linux-amd64: data
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-linux-armv7: data
-	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-linux-armv8: data
-	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-freebsd-amd64: data
-	GOARCH=amd64 GOOS=freebsd $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-windows-386: data
-	GOARCH=386 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
-
-windows-amd64: data
-	GOARCH=amd64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
-
-releases: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
+test-e2e: default
+	npm run test:e2e
 
 webapp-clean:
-	rm -r webapp/build
-
-data-clean:
 	rm -r server/build
 
-clean: webapp-clean data-clean
-	rm $(BINDIR)/*
+clean: webapp-clean
 	go clean -cache
 

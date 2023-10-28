@@ -1,39 +1,39 @@
 package cmd
 
 import (
+	"os"
+
 	"filegogo/server"
+	"filegogo/server/config"
 	"filegogo/server/httpd"
 
-	"github.com/BurntSushi/toml"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
 func init() {
-	config := &server.Config{
-		Http: &httpd.Config{
-			Listen:    "0.0.0.0:8080",
-			RoomAlive: 1024,
-			RoomCount: 10000,
-		},
-	}
-	app.Commands = append(app.Commands, &cli.Command{
-		Name:  "server",
-		Usage: "websocket broker server",
-		Before: func(c *cli.Context) error {
-			toml.DecodeFile(c.Path("config"), config)
-			return nil
-		},
-		Action: func(c *cli.Context) error {
-			server.Run(config)
-			return nil
-		},
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "config",
-				Aliases: []string{"c"},
-				Value:   "filegogo-server.toml",
-				Usage:   "set config file",
+	rootCmd.AddCommand(serverCmd)
+}
+
+var serverCmd = &cobra.Command{
+	Use:   "server",
+	Short: "websocket broker server",
+	Long:  `webapp, websocket, iceServer Server`,
+	Run: func(cmd *cobra.Command, args []string) {
+		config := &config.Config{
+			Http: &httpd.Config{
+				Listen:      "0.0.0.0:8080",
+				PathPrefix:  "",
+				StoragePath: "data",
 			},
-		},
-	})
+		}
+
+		loadConfig(config)
+
+		// Override `Http.Listen` to 0.0.0.0:$PORT (Automatic configuration for PaaS).
+		if port := os.Getenv("PORT"); port != "" {
+			config.Http.Listen = ":" + port
+		}
+
+		server.Run(config)
+	},
 }

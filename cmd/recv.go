@@ -5,31 +5,29 @@ import (
 
 	"filegogo/client"
 
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
 func init() {
-	app.Commands = append(app.Commands, &cli.Command{
-		Name:  "recv",
-		Usage: "recv <file>",
-		Action: func(c *cli.Context) error {
-			config := client.DefaultConfig
-			config.Server = c.String("share")
-			cli, err := client.NewClient(config)
-			if err != nil {
-				panic(err)
-			}
+	rootCmd.AddCommand(recvCmd)
+	recvCmd.Flags().StringP("share", "s", "https://send.22333.fun", "Share Link")
+}
 
-			cli.Recv(context.Background(), c.Args().Slice())
-			return nil
-		},
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "share",
-				Aliases: []string{"s"},
-				Value:   "https://send.22333.fun",
-				Usage:   "Share Link",
-			},
-		},
-	})
+var recvCmd = &cobra.Command{
+	Use:   "recv",
+	Short: "recv <file>",
+	Run: func(cmd *cobra.Command, args []string) {
+		config := client.DefaultConfig
+		loadConfig(config)
+
+		if share, err := cmd.Flags().GetString("share"); err == nil {
+			config.Server = share
+		}
+
+		cli, err := client.NewClient(config)
+		if err != nil {
+			panic(err)
+		}
+		cli.Recv(context.Background(), args)
+	},
 }

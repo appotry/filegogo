@@ -1,26 +1,37 @@
-FROM node:lts-alpine as builder-node
+FROM node:20-alpine as builder-node
 
 WORKDIR /app
 
-COPY webapp .
+COPY package.json package-lock.json ./
 
-RUN npm install && npm run build
-
-FROM golang:1.16-buster AS builder
-
-WORKDIR /src
+RUN npm install
 
 COPY . .
 
-COPY --from=builder-node /app/build /src/server/build
+RUN npm run build
+
+FROM golang:1.20-bookworm AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY . .
+
+COPY --from=builder-node /app/server/build /app/server/build
 
 RUN make build
 
 # Bin
-FROM scratch AS bin
+FROM alpine AS bin
 
-COPY --from=builder /src/filegogo /usr/bin/filegogo
+COPY --from=builder /app/conf/filegogo.toml /etc/filegogo.toml
+COPY --from=builder /app/filegogo /usr/bin/filegogo
 
 EXPOSE 8080/tcp
+
+CMD ["server"]
 
 ENTRYPOINT ["/usr/bin/filegogo"]

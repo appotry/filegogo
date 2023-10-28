@@ -8,8 +8,8 @@ import (
 	"filegogo/client/qrcode"
 	"filegogo/client/util"
 	"filegogo/libfgg"
-	"filegogo/libfgg/transfer"
-	"filegogo/server"
+	"filegogo/libfgg/pool"
+	"filegogo/server/config"
 
 	bar "github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
@@ -19,13 +19,14 @@ var (
 	DefaultConfig = &ClientConfig{
 		ShowQRcode:   true,
 		ShowProgress: true,
-		ServerConfig: &server.ApiConfig{},
+		ServerConfig: &config.ApiConfig{},
 		QRcodeConfig: &qrcode.Config{
 			Foreground: "black",
 			Background: "white",
 			Level:      "low",
 			Align:      "left",
 		},
+		NoIceServer: false,
 	}
 )
 
@@ -34,9 +35,10 @@ type ClientConfig struct {
 
 	ShowQRcode   bool
 	ShowProgress bool
-	ServerConfig *server.ApiConfig
+	ServerConfig *config.ApiConfig
 	QRcodeConfig *qrcode.Config
 	Level        string
+	NoIceServer  bool
 }
 
 type Client struct {
@@ -66,15 +68,15 @@ func (t *Client) OnShare(addr string) {
 	log.Println("=== ======================= ===")
 }
 
-func (t *Client) OnPreTran(file *transfer.MetaFile) {
+func (t *Client) OnPreTran(file *pool.Meta) {
 	if t.Config.ShowProgress {
-		t.bar = bar.New64(file.Size)
+		t.bar = bar.New64(int64(file.Size))
 	}
 }
 
 func (t *Client) OnProgress(c int64) {
 	if t.Config.ShowProgress {
-		t.bar.Add64(c)
+		t.bar.Set64(c)
 	}
 }
 
@@ -98,47 +100,66 @@ func (c *Client) overrideServer() {
 
 func (c *Client) Send(ctx context.Context, files []string) {
 	fgg := libfgg.NewFgg()
-	fgg.Tran.OnProgress = c.OnProgress
 	fgg.OnPreTran = c.OnPreTran
+	fgg.SetOnProgress(c.OnProgress)
+
+	// TODO:
+	//ctx, cancel := context.WithCancel(ctx)
+	//fgg.OnPostTran = func(h *pool.Hash) {
+	//	cancel()
+	//}
 
 	c.overrideServer()
 
 	fgg.UseWebsocket(util.ProtoHttpToWs(c.api.RoomAddress()))
-	if err := fgg.Send(files); err != nil {
+	if err := fgg.SetSend(files[0]); err != nil {
 		panic(err)
 	}
-	fgg.UseWebRTC(c.Config.ServerConfig.ICEServers)
-	if err := fgg.Run(); err != nil {
-		fmt.Println()
-		fmt.Println(err)
-	} else {
-		fmt.Println()
+
+	if !c.Config.NoIceServer {
+		log.Println("use webrtc")
+		fgg.UseWebRTC(c.Config.ServerConfig.ICEServers)
+	}
+
+	select {
+	case <-ctx.Done():
 	}
 }
 
 func (c *Client) Recv(ctx context.Context, files []string) {
 	fgg := libfgg.NewFgg()
-	fgg.Tran.OnProgress = c.OnProgress
-	fgg.OnPreTran = func(t *transfer.MetaFile) {
-		c.OnPreTran(t)
-		go func() {
-			fgg.RunWebRTC()
-			fgg.GetFile()
-		}()
-	}
+	fgg.OnPreTran = c.OnPreTran
+	fgg.SetOnProgress(c.OnProgress)
 
+	ctx, cancel := context.WithCancel(ctx)
+	fgg.OnPostTran = func(h *pool.Hash) {
+		cancel()
+	}
 	c.overrideServer()
 
 	fgg.UseWebsocket(util.ProtoHttpToWs(c.api.RoomAddress()))
-	if err := fgg.Recv(files); err != nil {
+	if err := fgg.SetRecv(files[0]); err != nil {
 		panic(err)
 	}
-	fgg.UseWebRTC(c.Config.ServerConfig.ICEServers)
-	if err := fgg.Run(); err != nil {
-		fmt.Println()
-		fmt.Println(err)
+	if !c.Config.NoIceServer {
+		log.Println("use webrtc")
+		fgg.UseWebRTC(c.Config.ServerConfig.ICEServers)
+	}
+
+	ch := make(chan bool)
+	fgg.OnRecvFile = func(meta *pool.Meta) {
+		ch <- true
+	}
+
+	go fgg.GetMeta()
+
+	<-ch
+	log.Println("start download file")
+	if err := fgg.Run(ctx); err != nil {
+		log.Println()
+		log.Println(err)
 	} else {
-		fmt.Println()
-		fmt.Println("md5 VerifyHash successful")
+		log.Println()
+		log.Println("md5 VerifyHash successful")
 	}
 }

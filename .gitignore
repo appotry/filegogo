@@ -4,6 +4,7 @@
 /filegogo-server.toml
 
 bin
+data
 build
 node_modules
 
@@ -22,3 +23,5 @@ node_modules
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+dist/

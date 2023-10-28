@@ -27,9 +27,26 @@
 
 [![Demo.gif](https://i.postimg.cc/wTyzyHMc/Peek-2020-10-24-11-29.gif)](https://postimg.cc/8jS992hj)
 
-## Depend
+## Deploy on your self server
 
-- golang >= 1.16
+```bash
+docker run -p 8080:8080 ghcr.io/a-wing/filegogo:latest server
+```
+
+## Architecture
+
+![filegogo-arch](./filegogo-arch.excalidraw.svg)
+
+### Components
+
+- app
+  - [x] server
+  - [x] webapp
+  - [ ] client-cli (current, have many problems)
+- lib
+  - [ ] libfgg.js (only browser)
+  - [ ] libfgg.go
+  - [ ] libfgg.rs
 
 ## Build && Install
 
@@ -39,21 +56,23 @@ make
 
 ## Run Development
 
-### Server
-
-```bash
-go run ./main.go server
-```
-
 ### Webapp
 
 ```bash
-cd webapp
-
 npm install
 
 # frontend
-npm run start
+# Default Listen port: 3000
+# Auto Proxy port: 8080
+npm run dev
+```
+
+### Server
+
+```bash
+
+# Default Listen port: 8080
+go run ./main.go server
 ```
 
 ### Client
@@ -95,6 +114,37 @@ relayMaxPort = 49200
 
 For example: [coturn](https://github.com/coturn/coturn)
 
+#### Docker Deployment Coturn
+
+```bash
+docker run -d --network=host --name=coturn coturn/coturn:alpine \
+           -n --log-file=stdout \
+           --min-port=49160 --max-port=49200 \
+           --lt-cred-mech --fingerprint \
+           --no-multicast-peers --no-cli \
+           --no-tlsv1 --no-tlsv1_1 \
+           --realm=filegogo \
+           --user=filegogo:filegogo \
+           --external-ip='$(detect-external-ip)' \
+           --relay-ip='$(detect-external-ip)' \
+           --listening-ip='$(detect-external-ip)' \
+           --listening-device=eth0
+```
+
+Test Deployment
+
+```bash
+# Test stun
+turnutils_stunclient cn.22333.fun
+turnutils_stunclient stun.22333.fun
+
+# Test turn
+turnutils_uclient -u filegogo -w filegogo -y cn.22333.fun
+turnutils_uclient -u filegogo -w filegogo -y turn.22333.fun
+```
+
+#### Package Manager Deployment
+
 ```sh
 apt install coturn
 ```
@@ -115,3 +165,11 @@ user=filegogo:filegogo
 realm=filegogo
 
 ```
+
+## Acknowledgments
+
+- [pion](https://github.com/pion/webrtc)
+- [croc](https://github.com/schollz/croc)
+- [firefox-send](https://github.com/mozilla/send)
+- [ffsend](https://github.com/timvisee/ffsend)
+

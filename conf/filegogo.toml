@@ -1,15 +1,13 @@
-level = "trace"
-
 [http]
 
 # http web service
 listen = "0.0.0.0:8080"
 
-# max concurrent
-roomAlive = 1024
+# path prefix under the domain name.
+pathPrefix = ""
 
-# room id: [0 - 9999]
-roomCount = 10000
+# http file relay storage
+storagePath = "data"
 
 # Enable Built-in turn server
 #[turn]
